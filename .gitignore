@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+
+# venv
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+
+# env vars
+.env
+
+# data & artifacts
+data/
+artifacts/
+logs/
+
+# notebooks
+.ipynb_checkpoints/
+
+# OS
+Thumbs.db
+.DS_Store
