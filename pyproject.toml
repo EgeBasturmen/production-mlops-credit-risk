@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "credit-risk-mlops"
+version = "0.1.0"
+description = "Credit risk ML project with production-grade MLOps practices"
+requires-python = ">=3.9"
+dependencies = [
+  "pandas",
+  "numpy",
+  "scikit-learn",
+  "fastapi",
+  "uvicorn[standard]",
+  "pydantic",
+  "joblib",
+  "python-dotenv",
+  "openpyxl",
+  "xlrd",
+  "pytest",
+  "httpx",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

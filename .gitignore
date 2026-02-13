@@ -25,3 +25,7 @@ logs/
 # OS
 Thumbs.db
 .DS_Store
+
+#ML
+mlruns/
+*.egg-info/
