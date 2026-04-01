@@ -1,0 +1,25 @@
+services:
+  api:
+    build: .
+    container_name: credit-risk-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./logs:/app/logs
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  dashboard:
+    build: .
+    container_name: credit-risk-dashboard
+    command: streamlit run src/credit_risk/dashboard/app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./logs:/app/logs
+      - ./src:/app/src

@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from credit_risk.config import PROJECT_ROOT
 from credit_risk.baseline_stats import compute_baseline_feature_stats
+from credit_risk.config import PROJECT_ROOT
 
 
 def main() -> None:
@@ -13,7 +13,9 @@ def main() -> None:
 
     stats = compute_baseline_feature_stats(df)
 
-    out_path = Path(PROJECT_ROOT) / "artifacts" / "model_v1" / "baseline_feature_stats.json"
+    out_path = (
+        Path(PROJECT_ROOT) / "artifacts" / "model_v1" / "baseline_feature_stats.json"
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(stats, indent=2), encoding="utf-8")
 

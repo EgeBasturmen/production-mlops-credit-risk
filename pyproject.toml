@@ -10,6 +10,7 @@ requires-python = ">=3.9"
 dependencies = [
   "pandas",
   "numpy",
+  "shap",
   "scikit-learn",
   "fastapi",
   "uvicorn[standard]",
@@ -20,6 +21,7 @@ dependencies = [
   "xlrd",
   "pytest",
   "httpx",
+  "prometheus-client",
 ]
 
 [tool.setuptools]

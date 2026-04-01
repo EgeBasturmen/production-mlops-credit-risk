@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -11,9 +9,12 @@ def _artifacts_ready() -> bool:
     return (art / "model.joblib").exists() and (art / "thresholds.json").exists()
 
 
-@pytest.mark.skipif(not _artifacts_ready(), reason="Model artifacts not found. Run train.py first.")
+@pytest.mark.skipif(
+    not _artifacts_ready(), reason="Model artifacts not found. Run train.py first."
+)
 def test_health():
-    from credit_risk.app import app  # import here so skipif can work safely
+    from credit_risk.app import app
+
     client = TestClient(app)
 
     r = client.get("/health")
@@ -21,9 +22,12 @@ def test_health():
     assert r.json()["status"] == "ok"
 
 
-@pytest.mark.skipif(not _artifacts_ready(), reason="Model artifacts not found. Run train.py first.")
+@pytest.mark.skipif(
+    not _artifacts_ready(), reason="Model artifacts not found. Run train.py first."
+)
 def test_model_info_has_thresholds():
     from credit_risk.app import app
+
     client = TestClient(app)
 
     r = client.get("/model/info")
@@ -35,9 +39,12 @@ def test_model_info_has_thresholds():
     assert "maxf1" in data["thresholds"]
 
 
-@pytest.mark.skipif(not _artifacts_ready(), reason="Model artifacts not found. Run train.py first.")
+@pytest.mark.skipif(
+    not _artifacts_ready(), reason="Model artifacts not found. Run train.py first."
+)
 def test_predict_valid_payload_returns_200():
     from credit_risk.app import app
+
     client = TestClient(app)
 
     payload = {
@@ -77,9 +84,12 @@ def test_predict_valid_payload_returns_200():
     assert data["mode"] == "fixed_0_5"
 
 
-@pytest.mark.skipif(not _artifacts_ready(), reason="Model artifacts not found. Run train.py first.")
+@pytest.mark.skipif(
+    not _artifacts_ready(), reason="Model artifacts not found. Run train.py first."
+)
 def test_predict_invalid_payload_returns_422():
     from credit_risk.app import app
+
     client = TestClient(app)
 
     bad_payload = {"X1": 123}  # eksik alanlar var -> 422 bekleriz

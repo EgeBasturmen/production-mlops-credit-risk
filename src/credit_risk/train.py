@@ -1,41 +1,37 @@
 from __future__ import annotations
+
+import json
 import platform
 import subprocess
 from datetime import datetime
-import sklearn
-import json
 from pathlib import Path
-from typing import Dict, Any
-from credit_risk.config import PROJECT_ROOT
-import numpy as np
-import pandas as pd
+from typing import Any, Dict
+from credit_risk.config import PROCESSED_DIR, PROJECT_ROOT
 import joblib
-
 import mlflow
 import mlflow.sklearn
+import numpy as np
+import pandas as pd
+import sklearn
 from mlflow.models.signature import infer_signature
-
-from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     average_precision_score,
-    precision_recall_curve,
     f1_score,
+    precision_recall_curve,
     precision_score,
     recall_score,
 )
+from sklearn.metrics import brier_score_loss
+from sklearn.calibration import calibration_curve
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from credit_risk.features import NUMERIC_FEATURES, CATEGORICAL_FEATURES
-from credit_risk.schema import TARGET_COLUMN
-from credit_risk.config import PROCESSED_DIR
 from credit_risk.baseline_stats import compute_baseline_feature_stats
+from credit_risk.features import CATEGORICAL_FEATURES, NUMERIC_FEATURES
+from credit_risk.schema import TARGET_COLUMN
 
-
-# ---------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------
 
 def _get_git_commit() -> str | None:
     try:
@@ -43,12 +39,8 @@ def _get_git_commit() -> str | None:
     except Exception:
         return None
 
+
 def make_ohe():
-    """
-    scikit-learn version compatibility:
-    - older: OneHotEncoder(..., sparse=...)
-    - newer: OneHotEncoder(..., sparse_output=...)
-    """
     try:
         return OneHotEncoder(handle_unknown="ignore", sparse_output=False)
     except TypeError:
@@ -56,9 +48,6 @@ def make_ohe():
 
 
 def load_split(name: str) -> pd.DataFrame:
-    """
-    Loads a parquet split from data/processed/ (or wherever PROCESSED_DIR points).
-    """
     path = PROCESSED_DIR / f"{name}.parquet"
     if not path.exists():
         raise FileNotFoundError(f"Split not found: {path}")
@@ -80,35 +69,44 @@ def evaluate_at_threshold(
     }
 
 
+def compute_calibration_metrics(
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+    n_bins: int = 10,
+) -> Dict[str, Any]:
+    frac_pos, mean_pred = calibration_curve(
+        y_true, y_prob, n_bins=n_bins, strategy="quantile"
+    )
+
+    return {
+        "brier_score": float(brier_score_loss(y_true, y_prob)),
+        "calibration_curve": {
+            "mean_predicted_value": [float(x) for x in mean_pred],
+            "fraction_of_positives": [float(x) for x in frac_pos],
+        },
+        "n_bins": int(n_bins),
+    }
+
+
 def threshold_for_recall(
     y_true: np.ndarray, y_prob: np.ndarray, min_recall: float = 0.80
 ) -> float:
-    """
-    Finds a threshold that achieves at least min_recall.
-    We align thresholds with recall/precision using recall[:-1].
-    Scan from high threshold -> low threshold and return first meeting recall >= min_recall.
-    """
     precision, recall, thresholds = precision_recall_curve(y_true, y_prob)
 
     if len(thresholds) == 0:
         return 0.5
 
-    recall_t = recall[:-1]        # aligned to thresholds
+    recall_t = recall[:-1]
     thresholds_t = thresholds
 
     for r, t in zip(recall_t[::-1], thresholds_t[::-1]):
         if r >= min_recall:
             return float(t)
 
-    # If nothing meets min_recall, return the minimum threshold (most permissive)
     return float(thresholds_t.min())
 
 
 def threshold_max_f1(y_true: np.ndarray, y_prob: np.ndarray) -> float:
-    """
-    Finds threshold maximizing F1 on PR curve.
-    Must align thresholds with precision/recall (use precision[:-1], recall[:-1]).
-    """
     precision, recall, thresholds = precision_recall_curve(y_true, y_prob)
 
     if len(thresholds) == 0:
@@ -122,9 +120,6 @@ def threshold_max_f1(y_true: np.ndarray, y_prob: np.ndarray) -> float:
 
 
 def _json_dump(path: Path, obj: Any) -> None:
-    """
-    JSON dump with numpy-safe casting.
-    """
     def _default(x):
         if isinstance(x, (np.floating, np.integer)):
             return x.item()
@@ -133,13 +128,9 @@ def _json_dump(path: Path, obj: Any) -> None:
     path.write_text(json.dumps(obj, indent=2, default=_default), encoding="utf-8")
 
 
-# ---------------------------------------------------------
-# MAIN
-# ---------------------------------------------------------
 def main() -> None:
-    # -----------------------------------------------------
-    # 1) Load data
-    # -----------------------------------------------------
+    # Load data
+
     train = load_split("train")
     val = load_split("val")
     test = load_split("test")
@@ -153,9 +144,8 @@ def main() -> None:
     X_test = test.drop(columns=[TARGET_COLUMN])
     y_test = test[TARGET_COLUMN].astype(int).values
 
-    # -----------------------------------------------------
-    # 2) Pipeline
-    # -----------------------------------------------------
+    # Pipeline
+
     preprocessor = ColumnTransformer(
         transformers=[
             ("num", StandardScaler(), NUMERIC_FEATURES),
@@ -177,53 +167,52 @@ def main() -> None:
         ]
     )
 
-    # -----------------------------------------------------
-    # 3) Output dir
-    # -----------------------------------------------------
+    # Output dir
+
     out_dir = PROJECT_ROOT / "artifacts" / "model_v2"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # -----------------------------------------------------
-    # 4) MLFLOW
-    # -----------------------------------------------------
+    # MLFLOW
+
     mlflow.set_tracking_uri("file:./mlruns")
     mlflow.set_experiment("credit-risk-default")
 
     with mlflow.start_run(run_name="logreg_onehot_baseline_v2") as run:
-        mlflow.set_tags({
-            "stage": "candidate",
-            "model_family": "logreg",
-            "version": "v2",
-            "target": TARGET_COLUMN,
-            "data_splits": "train/val/test",
-        })
+        mlflow.set_tags(
+            {
+                "stage": "candidate",
+                "model_family": "logreg",
+                "version": "v2",
+                "target": TARGET_COLUMN,
+                "data_splits": "train/val/test",
+            }
+        )
 
-        mlflow.log_params({
-            "numeric_scaler": "StandardScaler",
-            "categorical_encoder": "OneHotEncoder",
-            "model": "LogisticRegression",
-            "class_weight": "balanced",
-            "max_iter": 1000,
-            "n_numeric_features": len(NUMERIC_FEATURES),
-            "n_categorical_features": len(CATEGORICAL_FEATURES),
-        })
+        mlflow.log_params(
+            {
+                "numeric_scaler": "StandardScaler",
+                "categorical_encoder": "OneHotEncoder",
+                "model": "LogisticRegression",
+                "class_weight": "balanced",
+                "max_iter": 1000,
+                "n_numeric_features": len(NUMERIC_FEATURES),
+                "n_categorical_features": len(CATEGORICAL_FEATURES),
+            }
+        )
 
-        # -------------------------------------------------
-        # 5) Train
-        # -------------------------------------------------
+        # Train
+
         pipe.fit(X_train, y_train)
 
-        # -------------------------------------------------
-        # 6) Thresholds on VAL
-        # -------------------------------------------------
+        # 6)Thresholds on VAL
+
         val_prob = pipe.predict_proba(X_val)[:, 1]
 
         t_recall = threshold_for_recall(y_val, val_prob, min_recall=0.80)
         t_f1 = threshold_max_f1(y_val, val_prob)
 
-        # -------------------------------------------------
         # 7) Evaluate
-        # -------------------------------------------------
+
         val_metrics_recall = evaluate_at_threshold(y_val, val_prob, t_recall)
         val_metrics_f1 = evaluate_at_threshold(y_val, val_prob, t_f1)
         val_metrics_05 = evaluate_at_threshold(y_val, val_prob, 0.5)
@@ -234,9 +223,11 @@ def main() -> None:
         test_metrics_f1 = evaluate_at_threshold(y_test, test_prob, t_f1)
         test_metrics_05 = evaluate_at_threshold(y_test, test_prob, 0.5)
 
-        # -------------------------------------------------
-        # 8) Save local artifacts
-        # -------------------------------------------------
+        val_calibration = compute_calibration_metrics(y_val, val_prob, n_bins=10)
+        test_calibration = compute_calibration_metrics(y_test, test_prob, n_bins=10)
+
+        # Save local artifacts
+
         joblib.dump(pipe, out_dir / "model.joblib")
 
         metrics_payload = {
@@ -260,19 +251,27 @@ def main() -> None:
         }
         _json_dump(out_dir / "thresholds.json", thresholds_payload)
 
-        # ✅ Baseline stats for drift monitoring
+        calibration_payload = {
+            "val": val_calibration,
+            "test": test_calibration,
+        }
+        _json_dump(out_dir / "calibration.json", calibration_payload)
+
+        # Baseline stats for drift monitoring
         baseline_stats = compute_baseline_feature_stats(X_train)
         baseline_stats["target_mean"] = float(y_train.mean())
         baseline_stats["n_train_rows"] = int(len(y_train))
         _json_dump(out_dir / "baseline_feature_stats.json", baseline_stats)
 
-        # ✅ run metadata (model provenance)
+        # run metadata
+
         run_meta = {
             "created_at_utc": datetime.utcnow().isoformat() + "Z",
             "git_commit": _get_git_commit(),
             "python_version": platform.python_version(),
             "sklearn_version": sklearn.__version__,
             "mlflow_run_id": run.info.run_id,
+            "model_version": out_dir.name,
             "artifact_dir": str(out_dir.resolve()),
             "data": {
                 "train_rows": int(X_train.shape[0]),
@@ -282,34 +281,39 @@ def main() -> None:
             },
         }
 
+        latest_payload = {
+            "model_version": out_dir.name,
+            "artifact_subdir": out_dir.name,
+            "mlflow_run_id": run.info.run_id,
+            "created_at_utc": run_meta["created_at_utc"],
+        }
+        latest_path = PROJECT_ROOT / "artifacts" / "latest.json"
+
+        _json_dump(latest_path, latest_payload)
+
         _json_dump(out_dir / "run_meta.json", run_meta)
 
-        # -------------------------------------------------
-        # 9) MLFLOW LOGGING
-        # -------------------------------------------------
-        mlflow.log_metrics({
-            "val_pr_auc": val_metrics_recall["pr_auc"],
-            "test_pr_auc": test_metrics_recall["pr_auc"],
+        mlflow.log_metrics(
+            {
+                "val_pr_auc": val_metrics_recall["pr_auc"],
+                "test_pr_auc": test_metrics_recall["pr_auc"],
+                "val_f1_recall80": val_metrics_recall["f1"],
+                "test_f1_recall80": test_metrics_recall["f1"],
+                "threshold_recall80": float(t_recall),
+                "val_f1_maxf1": val_metrics_f1["f1"],
+                "test_f1_maxf1": test_metrics_f1["f1"],
+                "threshold_maxf1": float(t_f1),
+                "val_f1_05": val_metrics_05["f1"],
+                "test_f1_05": test_metrics_05["f1"],
+                "val_brier_score": val_calibration["brier_score"],
+                "test_brier_score": test_calibration["brier_score"],
+            }
+        )
 
-            "val_f1_recall80": val_metrics_recall["f1"],
-            "test_f1_recall80": test_metrics_recall["f1"],
-            "threshold_recall80": float(t_recall),
-
-            "val_f1_maxf1": val_metrics_f1["f1"],
-            "test_f1_maxf1": test_metrics_f1["f1"],
-            "threshold_maxf1": float(t_f1),
-
-            "val_f1_05": val_metrics_05["f1"],
-            "test_f1_05": test_metrics_05["f1"],
-        })
-
-        # log local artifacts folder (includes baseline + thresholds)
         mlflow.log_artifacts(str(out_dir))
 
-        # signature + input_example
         input_example = X_train.head(200).copy()
 
-        # If integer columns may have missing at inference time, cast to float
         for c in input_example.columns:
             if pd.api.types.is_integer_dtype(input_example[c]):
                 input_example[c] = input_example[c].astype("float64")
@@ -326,9 +330,8 @@ def main() -> None:
             input_example=input_example,
         )
 
-    # -----------------------------------------------------
-    # 10) Print summary
-    # -----------------------------------------------------
+    # Print summary
+
     print("\n--- VALIDATION ---")
     print("recall>=0.80:", val_metrics_recall)
     print("max_f1:", val_metrics_f1)

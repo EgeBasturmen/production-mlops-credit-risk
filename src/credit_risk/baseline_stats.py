@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any, Dict
 
 import pandas as pd
-from credit_risk.features import NUMERIC_FEATURES, CATEGORICAL_FEATURES
+
+from credit_risk.features import CATEGORICAL_FEATURES, NUMERIC_FEATURES
 
 
 def compute_baseline_feature_stats(df: pd.DataFrame) -> Dict[str, Any]:

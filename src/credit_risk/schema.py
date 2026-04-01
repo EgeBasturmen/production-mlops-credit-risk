@@ -5,12 +5,13 @@ from pathlib import Path
 from typing import Any, Dict
 
 import pandas as pd
+
 from credit_risk.config import TARGET_COLUMN
 
 
 def infer_column_type(s: pd.Series) -> str:
     if pd.api.types.is_numeric_dtype(s):
-        # numeric ama integer mı float mı?
+        # integer mı float mı?
         return "int" if pd.api.types.is_integer_dtype(s) else "float"
     return "categorical"
 
@@ -46,7 +47,6 @@ def build_schema(df: pd.DataFrame) -> Dict[str, Any]:
                 }
             )
         else:
-            # kategorik gibi davran: en sık 5 değer
             top = s.astype(str).value_counts().head(5).to_dict()
             col_info["top_values"] = top
 
@@ -57,4 +57,6 @@ def build_schema(df: pd.DataFrame) -> Dict[str, Any]:
 
 def save_schema(schema: Dict[str, Any], out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(schema, indent=2, ensure_ascii=False), encoding="utf-8")
+    out_path.write_text(
+        json.dumps(schema, indent=2, ensure_ascii=False), encoding="utf-8"
+    )

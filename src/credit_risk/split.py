@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Tuple
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from credit_risk.config import TARGET_COLUMN, RANDOM_STATE
+from credit_risk.config import RANDOM_STATE, TARGET_COLUMN
 
 
 @dataclass
@@ -19,9 +18,9 @@ class SplitResult:
 def split_train_val_test(
     df: pd.DataFrame,
     test_size: float = 0.20,
-    val_size: float = 0.10,  # train içinden ayrılacak val oranı
+    val_size: float = 0.10,
 ) -> SplitResult:
-    # 1) test ayır
+    # test
     train_val, test = train_test_split(
         df,
         test_size=test_size,
@@ -29,8 +28,8 @@ def split_train_val_test(
         stratify=df[TARGET_COLUMN],
     )
 
-    # 2) train_val içinden val ayır
-    # val_size train_val'a göre uygulanır
+    # train_val içinden val ayır
+
     train, val = train_test_split(
         train_val,
         test_size=val_size,

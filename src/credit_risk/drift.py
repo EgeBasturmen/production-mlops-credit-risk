@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Dict, Any, List, Tuple
 import math
+from pathlib import Path
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -14,14 +14,11 @@ def _safe_div(a: float, b: float) -> float:
 
 
 def psi_numeric(expected: pd.Series, actual: pd.Series, n_bins: int = 10) -> float:
-    """
-    PSI for numeric features using quantile bins from expected.
-    """
     expected = pd.to_numeric(expected, errors="coerce").dropna()
     actual = pd.to_numeric(actual, errors="coerce").dropna()
 
     if len(expected) < 50 or len(actual) < 50:
-        return 0.0  # too little data
+        return 0.0
 
     qs = np.linspace(0, 1, n_bins + 1)
     bins = expected.quantile(qs).values
@@ -44,11 +41,6 @@ def psi_numeric(expected: pd.Series, actual: pd.Series, n_bins: int = 10) -> flo
 
 
 def psi_categorical(expected: pd.Series, actual: pd.Series, top_k: int = 20) -> float:
-    """
-    PSI for categorical features:
-    - take top_k categories from expected
-    - bucket the rest into "__OTHER__"
-    """
     expected = expected.astype(str).fillna("__NA__")
     actual = actual.astype(str).fillna("__NA__")
 
@@ -79,9 +71,6 @@ def psi_categorical(expected: pd.Series, actual: pd.Series, top_k: int = 20) -> 
 
 
 def load_prod_jsonl(path: Path, max_rows: int = 500) -> pd.DataFrame:
-    """
-    Reads last max_rows lines of jsonl. If file is large, this is still OK for now.
-    """
     if not path.exists():
         return pd.DataFrame()
 
@@ -99,7 +88,7 @@ def load_prod_jsonl(path: Path, max_rows: int = 500) -> pd.DataFrame:
         return pd.DataFrame()
 
     df = pd.DataFrame(rows)
-    # expand features dict into columns
+
     if "features" in df.columns:
         feat = pd.json_normalize(df["features"])
         df = pd.concat([df.drop(columns=["features"]), feat], axis=1)
@@ -115,10 +104,6 @@ def compute_drift_summary(
     psi_warn: float = 0.10,
     psi_alert: float = 0.25,
 ) -> Dict[str, Any]:
-    """
-    baseline_stats: from baseline_feature_stats.json (train distribution)
-    prod_df: last N prod predictions with feature columns
-    """
     if prod_df.empty:
         return {
             "status": "NO_DATA",
@@ -131,14 +116,18 @@ def compute_drift_summary(
 
     # prediction drift (default rate)
     if "prediction" in prod_df.columns:
-        prod_default_rate = float(pd.to_numeric(prod_df["prediction"], errors="coerce").dropna().mean())
+        prod_default_rate = float(
+            pd.to_numeric(prod_df["prediction"], errors="coerce").dropna().mean()
+        )
     else:
         prod_default_rate = None
 
-    # baseline default rate (from stats json if present)
+    # baseline default rate
     train_default_rate = None
     try:
-        train_default_rate = float(baseline_stats.get("target_mean", baseline_stats.get("default_rate", None)))
+        train_default_rate = float(
+            baseline_stats.get("target_mean", baseline_stats.get("default_rate", None))
+        )
     except Exception:
         train_default_rate = None
 
@@ -160,19 +149,14 @@ def compute_drift_summary(
     for col in numeric_features:
         if col not in prod_df.columns:
             continue
-        exp_col = None
-        # if baseline has quantiles we can't reconstruct full dist, so we use train sample stats approach:
-        # for PSI we need expected sample; in this simplified version we'll approximate using prod vs prod baseline bins derived from baseline quantiles not possible.
-        # Instead: use prod bins from baseline quantiles stored in baseline_stats[col] if available.
-        # If not available -> skip PSI for that col.
-        # (We'll improve later by saving train sample snapshot.)
+
         bs = baseline_stats.get("numeric", {}).get(col, None)
         if not bs or "q01" not in bs:
             continue
 
-        # create synthetic expected sample using quantiles (approx)
-        # We'll use a cheap approach: sample values at stored quantiles
-        exp = pd.Series([bs["q01"], bs["q05"], bs["q50"], bs["q95"], bs["q99"]]).repeat(200)
+        exp = pd.Series([bs["q01"], bs["q05"], bs["q50"], bs["q95"], bs["q99"]]).repeat(
+            200
+        )
         act = pd.to_numeric(prod_df[col], errors="coerce").dropna()
 
         psi = psi_numeric(exp, act, n_bins=10)
@@ -195,7 +179,6 @@ def compute_drift_summary(
         if not bs or "distribution" not in bs:
             continue
 
-        # build expected sample by distribution
         dist = bs["distribution"]
         exp_vals = []
         for k, p in dist.items():

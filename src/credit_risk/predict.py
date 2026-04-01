@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, Any
-
-import pandas as pd
+from typing import Any, Dict
 import joblib
-
+import pandas as pd
 
 ARTIFACT_DIR = Path("artifacts/model_v1")
 MODEL_PATH = ARTIFACT_DIR / "model.joblib"
@@ -24,12 +22,12 @@ def load_threshold() -> float:
         raise FileNotFoundError(f"Threshold file not found: {THRESHOLD_PATH}")
 
     data = json.loads(THRESHOLD_PATH.read_text(encoding="utf-8"))
-    # senin train.py’de kaydettiğin anahtara göre:
-    # örn {"recall80": 0.36, "maxf1": 0.55, ...} gibi
-    # şimdilik recall80’ı kullanacağız:
+
     t = data.get("recall80")
     if t is None:
-        raise KeyError(f"'recall80' not found in {THRESHOLD_PATH}. Keys: {list(data.keys())}")
+        raise KeyError(
+            f"'recall80' not found in {THRESHOLD_PATH}. Keys: {list(data.keys())}"
+        )
     return float(t)
 
 
@@ -41,16 +39,10 @@ def predict_one(row: Dict[str, Any]) -> Dict[str, Any]:
     prob = float(model.predict_proba(X)[:, 1][0])
     pred = int(prob >= threshold)
 
-
-    return {
-        "prob_default": prob,
-        "threshold": threshold,
-        "pred_default": pred
-    }
+    return {"prob_default": prob, "threshold": threshold, "pred_default": pred}
 
 
 def main():
-    # Test için örnek: datasetindeki kolon isimlerine göre doldur
     sample = {
         "X1": 200000,
         "X2": 2,
