@@ -1,0 +1,8 @@
+{
+  "model_version": "model_v3",
+  "artifact_subdir": "model_v3",
+  "mlflow_run_id": "ddd331be893d415f8107c59b9073ab98",
+  "promoted_at_utc": "2026-03-30T03:35:14.309492Z",
+  "source_latest_created_at_utc": "2026-03-30T03:32:49.667032Z",
+  "promotion_reason": "test.pr_auc: 0.550868 >= 0.524992 + 0.01"
+}
