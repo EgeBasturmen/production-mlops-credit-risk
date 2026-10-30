@@ -1,3 +1,5 @@
+## 🎬 Demo Video
+[▶ Watch Credit Risk MLOps Demo](https://www.youtube.com/watch?v=GYFZsu0iwyA)
 # Credit Risk MLOps System
 
 An end-to-end **credit risk prediction system** built with **Python, scikit-learn, FastAPI, MLflow, Prometheus, Streamlit, and Docker**.
